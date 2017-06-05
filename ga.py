@@ -105,10 +105,15 @@ class GeneticAlgorithm:
             return np.nan_to_num(vfunc(self.X[:, col1], self.X[:, col2]))
 
     def __transform(self, member):
-        return
+        z = np.zeros(self.X.shape, dtype=self.X.dtype)
+        for col, feature in enumerate(member):
+            z[:, col] = self.__apply_function(feature)
+        # with or without old dataset?
+        return np.concatenate((z, self.X), axis=1)
 
     def __get_fitness(self, clf, X, y):
-        return
+        return cross_val_score(clf, X, y,
+                            scoring=self.metric, cv=self.fold, n_jobs=-1).mean()
     
     def __select_parents(self, q=4):
         return
