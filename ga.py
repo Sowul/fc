@@ -2,6 +2,9 @@
 
 __author__ = "Bartosz Sowul"
 
+from collections import namedtuple
+from copy import deepcopy
+
 import numpy as np
 from numpy import diff, gradient
 from numpy import nanprod, nansum, nanmax, nanmin, ptp, nanpercentile, nanmedian, nanmean, nanstd, nanvar
@@ -127,6 +130,21 @@ class GeneticAlgorithm:
         return np.reshape(parents, (len(parents)//2, 2))
         
     def __crossover(self, parents, population):
+        new_population = np.empty((0, self.X.shape[1]), dtype=np.int8)
+        children = np.empty((0, self.X.shape[1]), dtype=np.int8)
+        population = deepcopy(population)
+        for couple in parents:
+            first_parent = np.reshape(population[couple[0]].transformations,
+                                                        (-1, self.X.shape[1]))
+            second_parent = np.reshape(population[couple[1]].transformations,
+                                                        (-1, self.X.shape[1]))
+            for feature in range(first_parent.shape[1]):
+                if 0.5 > np.random.random_sample():
+                    first_parent[0][feature], second_parent[0][feature] = (
+                    second_parent[0][feature], first_parent[0][feature])
+            children = np.append(children, first_parent, axis=0)
+            children = np.append(children, second_parent, axis=0)        
+        new_population = np.append(new_population, children, axis=0)
         return new_population
     
     def __mutate(self, new_population, std):
