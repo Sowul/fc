@@ -77,7 +77,11 @@ class GeneticAlgorithm:
                         self.X.shape[1], replace=False), (-1, self.X.shape[1]))
                         
     def __create_population(self):
-        return
+        population = np.empty((0, self.X.shape[1]), dtype=np.int8)
+        for member in range(self.pop_members):
+            population = np.append(population, self.__create_individual(),
+                                   axis=0)
+        return population
 
     def __apply_function(self, feature):
 
