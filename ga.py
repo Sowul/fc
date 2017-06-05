@@ -84,6 +84,25 @@ class GeneticAlgorithm:
         return population
 
     def __apply_function(self, feature):
+        if (feature <= 1):
+            return np.nan_to_num(np.nanmean(np.apply_along_axis(
+                                self.__operators[feature], 1, self.X), axis=1))
+        elif (feature > 1 and feature <= 12):
+            if (feature == 7):
+                return np.nan_to_num(np.apply_along_axis(
+                                self.__operators[feature], 1, self.X, 70))
+            else:
+                return np.nan_to_num(np.apply_along_axis(
+                                self.__operators[feature], 1, self.X))
+        elif (feature > 12 and feature <= 30):
+            col = np.random.randint(self.X.shape[1])
+            vfunc = np.vectorize(self.__operators[feature])
+            return np.nan_to_num(vfunc(self.X[:, col]))
+        else:
+            col1 = np.random.randint(self.X.shape[1])
+            col2 = np.random.randint(self.X.shape[1])
+            vfunc = np.vectorize(self.__operators[feature])
+            return np.nan_to_num(vfunc(self.X[:, col1], self.X[:, col2]))
 
     def __transform(self, member):
         return
