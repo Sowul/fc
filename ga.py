@@ -116,7 +116,15 @@ class GeneticAlgorithm:
                             scoring=self.metric, cv=self.fold, n_jobs=-1).mean()
     
     def __select_parents(self, q=4):
-        return
+        parents = np.empty((0, q), dtype=np.int8)
+        for i in range(self.pop_members-self.migrants-self.elite):
+            parent = np.random.choice(
+                                self.pop_members, size=(1, q), replace=False)
+            parents = np.append(parents, parent, axis=0)
+        parents = np.amin(parents, axis=1)
+        np.random.shuffle(parents)
+        # self-crossover?
+        return np.reshape(parents, (len(parents)//2, 2))
         
     def __crossover(self, parents, population):
         return new_population
