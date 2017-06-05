@@ -4,6 +4,7 @@ __author__ = "Bartosz Sowul"
 
 from collections import namedtuple
 from copy import deepcopy
+from operator import attrgetter
 
 import numpy as np
 from numpy import diff, gradient
@@ -154,13 +155,72 @@ class GeneticAlgorithm:
         return new_population
 
     def __create_next_generation(self, population):
+        population = sorted(population, key=attrgetter('score'), reverse=True)
+        parents = self.select_parents()
+        new_population = self.crossover(parents, population)
+        new_popualtion = self.mutate(new_population, np.std(population)[0])      
+        for migrant in range(self.migrants):
+            new_population = np.append(new_population,
+                                        self.__create_individual(), axis=0) 
+        for i in range(self.elite):
+            elitist = np.reshape(population[i].transformations,
+                                (-1, self.X.shape[1]))
+            new_population = np.append(new_population, elitist, axis=0)
         return new_population
 
     def fit(self, X, y):
         self.X = np.asarray(X)
-        self.shape = 
         self.y = np.asarray(y).reshape(y.shape[0], )
         
+        self._base_score = cross_val_score(self.clf, self.X, self.y,
+                                       scoring=self.metric, cv=self.fold).mean()
+        print("Base score: ", self._base_score)
+        self._best_score = self._base_score
+        
+        population = self.__create_population()
+        
+        for i in trange(50, desc='Generation', leave=False):
+            for member in tqdm(population, desc='Individual', leave=False):
+                new_X = self.__transform(member)
+                score = self.__get_fitness(member, self.clf, new_X, self.y)
+                self.__individuals.append(self.__Individual(member, score))
+
+            self.__generations.append(self.__individuals)
+
+            best = sorted(self.__individuals, key=lambda tup: tup.score,
+                            reverse=True)[0]
+            count = 1
+            if (i > 0):
+                for elem in self.__best_individuals:
+                    if(list(best.transformations) == list(elem.transformations)):
+                        count += 1
+            else:
+                pass
+            self.__best_individuals.append(
+                self.__BestIndividual(i, best.transformations, best.score, count))
+            print("Best from gen: {}, count: {}".format(best, count))
+            
+            if (i == 0):
+                self._best_score = self.__best_individuals[i]
+            if (best.score > self._best_score.score):
+                self._best_score = self.__best_individuals[i]
+            else:
+                pass
+            self.__gen_score.append(self.__Generation(i, 
+            sum([tup[1] for tup in self.__individuals])/len(self.__individuals),
+            self.__best_individuals[i]))
+            population = self.__create_next_generation(self.__individuals)
+            self.__individuals = []
+        else:
+            best = sorted(self.__best_individuals, key=lambda tup: tup.count,
+                            reverse=True)[0]
+            if(best.count > 1):
+                avg = 0
+                for elem in self.__best_individuals:
+                    if(list(best.transformations) == list(elem.transformations)):
+                        avg += elem.score
+                print("Most frequent individual: ", best)
+                print("Average score: ", avg/best.count)
 
 
 if __name__ == "__main__":
