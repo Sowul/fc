@@ -224,4 +224,28 @@ class GeneticAlgorithm:
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from sklearn.datasets import load_iris
+    from sklearn.ensemble import RandomForestClassifier
+    
+    np.seterr(all='ignore')
+    np.set_printoptions(threshold=np.nan)
+    
+    clf = RandomForestClassifier(max_depth=3)
+    ga = GeneticAlgorithm(clf, 5, 1000) 
+    iris = load_iris()
+    ga.fit(iris.data, iris.target)
 
+    print("Best score: ", ga._best_score)
+
+    mean_score = [tup[1] for tup in ga._GeneticAlgorithm__gen_score]
+    best_score = [tup[2][2] for tup in ga._GeneticAlgorithm__gen_score]
+
+    plt.plot(ga._best_score.gen_num, ga._best_score.score, 'ro')
+    plt.plot([0, len(mean_score)], [ga._base_score, ga._base_score], 'b--', lw=2)
+    plt.plot(range(len(mean_score)), mean_score, 'k', label='mean')
+    plt.plot(range(len(best_score)), best_score, 'g', label='best')
+    plt.xlabel('generations')
+    plt.ylabel(ga.metric)
+    plt.legend(loc='upper left')
+    plt.show()
