@@ -62,18 +62,20 @@ class GeneticAlgorithm:
                             floor_divide,
                             mod]
         self.__best_individuals = []
-        self.__BestIndividual = namedtuple(
-             'BestIndividual', ['gen_num', 'transformations', 'score', 'count'])
+        self.__BestIndividual = namedtuple('BestIndividual',
+                               ['gen_num', 'transformations', 'score', 'count'])
         self.__gen_score = []
         self.__generations = []
-        self.__Generation = namedtuple(
-                            'Generation', ['gen_num', 'mean_score', 'best_ind'])
+        self.__Generation = namedtuple('Generation',
+                            ['gen_num', 'mean_score', 'best_ind'])
         self.__individuals = []
-        self.__Individual = namedtuple('Individual', ['transformations', 'score'])
+        self.__Individual = namedtuple('Individual',
+                            ['transformations', 'score'])
 
     def __create_individual(self):
-        return
-
+        return np.reshape(np.random.choice(len(self.__operators),
+                        self.X.shape[1], replace=False), (-1, self.X.shape[1]))
+                        
     def __create_population(self):
         return
 
