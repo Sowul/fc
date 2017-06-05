@@ -130,6 +130,9 @@ class GeneticAlgorithm:
         return new_population
     
     def __mutate(self, new_population, std):
+        std = int(round(std))
+        mutation = np.random.randint(-std-1, std+1, size=new_population.shape)
+        new_population = (new_population + mutation) % len(self.__operators)
         return new_population
 
     def __create_next_generation(self, population):
