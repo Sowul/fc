@@ -2,6 +2,14 @@
 
 __author__ = "Bartosz Sowul"
 
+import numpy as np
+from numpy import diff, gradient
+from numpy import nanprod, nansum, nanmax, nanmin, ptp, nanpercentile, nanmedian, nanmean, nanstd, nanvar
+from numpy import sin, cos, around, rint, fix, floor, ceil, trunc, trapz, exp, expm1, exp2, log1p, sinc, reciprocal, negative, sqrt, fabs, sign
+from numpy import logaddexp, logaddexp2, add, multiply, divide, power, subtract, true_divide, floor_divide, mod
+from sklearn.model_selection import cross_val_score
+from tqdm import trange, tqdm
+
 class GeneticAlgorithm:
 
     def __init__(self, clf, fold, duration):
@@ -53,6 +61,15 @@ class GeneticAlgorithm:
                             true_divide,
                             floor_divide,
                             mod]
+        self.__best_individuals = []
+        self.__BestIndividual = namedtuple(
+             'BestIndividual', ['gen_num', 'transformations', 'score', 'count'])
+        self.__gen_score = []
+        self.__generations = []
+        self.__Generation = namedtuple(
+                            'Generation', ['gen_num', 'mean_score', 'best_ind'])
+        self.__individuals = []
+        self.__Individual = namedtuple('Individual', ['transformations', 'score'])
 
     def __create_individual(self):
         return
@@ -67,22 +84,24 @@ class GeneticAlgorithm:
 
     def __get_fitness(self, clf, X, y):
         return
+    
+    def __select_parents(self, q=4):
+        return
+        
+    def __crossover(self, parents, population):
+        return new_population
+    
+    def __mutate(self, new_population, std):
+        return new_population
 
     def __create_next_generation(self, population):
         return new_population
 
-    def mutate(self, new_population, std):
-        return new_population
-
-    def crossover(self, parents, population):
-        return new_population
-
-    def select_parents(self, q=4):
-        return 
-
     def fit(self, X, y):
         self.X = np.asarray(X)
+        self.shape = 
         self.y = np.asarray(y).reshape(y.shape[0], )
+        
 
 
 if __name__ == "__main__":
