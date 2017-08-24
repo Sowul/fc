@@ -5,7 +5,6 @@ from collections import Counter
 from copy import deepcopy
 from filecmp import cmp
 from operator import attrgetter
-import sys
 
 import numpy as np
 import pytest
@@ -144,14 +143,8 @@ def test_ga_transform(ga_fitted):
     assert new_X.shape[0] == iris.data.shape[0]
     assert new_X.shape[1] == iris.data.shape[1] + ga_fitted.n_features
 
-def test_ga_save(ga_fitted):
+def test_ga_save_load(ga_fitted):
     ga_fitted.save('tests/ga_saved_ind.json')
-    if sys.version_info[0] < 3:
-        assert cmp('tests/ga_saved_ind.json', 'tests/model_ind_py2.json') == True
-    else:
-        assert cmp('tests/ga_saved_ind.json', 'tests/model_ind_py3.json') == True
-
-def test_ga_load(ga_fitted):
     loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
     assert np.array_equal(ga_fitted._best_score.transformations, loaded_ind.transformations) == True
     assert np.array_equal(ga_fitted._best_score.columns, loaded_ind.columns) == True

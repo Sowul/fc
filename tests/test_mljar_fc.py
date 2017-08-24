@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from filecmp import cmp
-import sys
 
 import numpy as np
 import pytest
@@ -23,14 +22,8 @@ def fc():
 def test_fc_fit(fc):
     assert fc.ga._base_score < fc.ga._best_score.score
 
-def test_fc_save(fc):
+def test_fc_save_load(fc):
     fc.save('tests/fc_saved_ind.json')
-    if sys.version_info[0] < 3:
-        assert cmp('tests/fc_saved_ind.json', 'tests/model_ind_py2.json') == True
-    else:
-        assert cmp('tests/fc_saved_ind.json', 'tests/model_ind_py3.json') == True
-
-def test_fc_load(fc):
     loaded_ind = fc.load('tests/fc_saved_ind.json')
     assert np.array_equal(fc.ga._best_score.transformations, loaded_ind.transformations) == True
     assert np.array_equal(fc.ga._best_score.columns, loaded_ind.columns) == True
