@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 __author__ = "Bartosz Sowul"
 
@@ -10,20 +11,19 @@ class FeatureConstructor:
         self.clf = clf
         self.fold = fold
         self.duration = duration
-    
-    def fit(self, X, y):
-        return
-        
-    def get_params(self):
-        return
-    
-    def save(individual, filename):
-        return
-    
-    def load(filename):
-        return
-        
-    def transform(X, transformations):
-        return
-        
+        self.ga = GeneticAlgorithm(clf, fold, duration)
 
+    def fit(self, X, y):
+        self.ga.fit(X, y)
+
+    def get_params(self):
+        self.ga.get_params()
+
+    def save(self, filename):
+        self.ga.save(filename)
+
+    def load(self, filename):
+        return self.ga.load(filename)
+
+    def transform(self, X, individual):
+        return self.ga.transform(X, individual)
