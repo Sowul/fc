@@ -13,16 +13,43 @@ import json
 from operator import attrgetter
 
 import numpy as np
-from numpy import diff, gradient
-from numpy import nanprod, nansum, nanmax, nanmin, ptp, nanpercentile, nanmedian, nanmean, nanstd, nanvar
-from numpy import sin, cos, around, rint, fix, floor, ceil, trunc, trapz, exp, expm1, exp2, log1p, sinc, reciprocal, negative, sqrt, fabs, sign
-from numpy import logaddexp, logaddexp2, add, multiply, divide, power, subtract, true_divide, floor_divide, mod
 from sklearn.model_selection import cross_val_score
 from tqdm import trange, tqdm
 
 class GeneticAlgorithm:
+    """Algorithm used for creating new features."""
 
     def __init__(self, clf, fold, duration):
+        """Init method.
+
+        Args:
+            clf : classifier object implementing 'fit'
+                Classfier used for scoring new features.
+
+            fold : int, cross-validation generator or an iterable
+                Determines the cross-validation splitting strategy,
+                see also http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_score.html.
+
+            duration : int
+                Determines how many minutes a genetic algorithm runs.
+
+            metric :
+                Metric used for scoring new features,
+                see also http://scikit-learn.org/stable/modules/model_evaluation.html#common-cases-predefined-values.
+
+            pop_members : int
+                Determines how big the population is.
+
+            elite : int
+                Determines how many individuals are guaranteed a place in the next generation.
+
+            migrants : int
+                Determines how many new individuals (possible solutions in a search space) are created (migrate) each generation.
+
+            n_operators : int
+                Length of a list of operators used for transforming a dataset.
+
+        """
         self.clf = clf
         self.fold = fold
         self.duration = duration
@@ -30,48 +57,49 @@ class GeneticAlgorithm:
         self.pop_members = 100
         self.elite = 4
         self.migrants = 6
-        self.__operators = [diff,
-                            gradient,
-                            nanprod,
-                            nansum,
-                            nanmax,
-                            nanmin,
-                            ptp,
-                            nanpercentile,
-                            nanmedian,
-                            nanmean,
-                            nanstd,
-                            nanvar,
-                            trapz,
-                            sin,
-                            cos,
-                            around,
-                            rint,
-                            fix,
-                            floor,
-                            ceil,
-                            trunc,
-                            exp,
-                            expm1,
-                            exp2,
-                            log1p,
-                            sinc,
-                            reciprocal,
-                            negative,
-                            sqrt,
-                            fabs,
-                            sign,
-                            logaddexp,
-                            logaddexp2,
-                            add,
-                            multiply,
-                            divide,
-                            power,
-                            subtract,
-                            true_divide,
-                            floor_divide,
-                            mod]
+        self.__operators = [np.diff,
+                            np.gradient,
+                            np.nanprod,
+                            np.nansum,
+                            np.nanmax,
+                            np.nanmin,
+                            np.ptp,
+                            np.nanpercentile,
+                            np.nanmedian,
+                            np.nanmean,
+                            np.nanstd,
+                            np.nanvar,
+                            np.trapz,
+                            np.sin,
+                            np.cos,
+                            np.around,
+                            np.rint,
+                            np.fix,
+                            np.floor,
+                            np.ceil,
+                            np.trunc,
+                            np.exp,
+                            np.expm1,
+                            np.exp2,
+                            np.log1p,
+                            np.sinc,
+                            np.reciprocal,
+                            np.negative,
+                            np.sqrt,
+                            np.fabs,
+                            np.sign,
+                            np.logaddexp,
+                            np.logaddexp2,
+                            np.add,
+                            np.multiply,
+                            np.divide,
+                            np.power,
+                            np.subtract,
+                            np.true_divide,
+                            np.floor_divide,
+                            np.mod]
         self.n_operators = len(self.__operators)
+        self._columns = []
         self._individuals = []
         self._Individual = namedtuple('Individual',
                             ['transformations', 'columns', 'score'])
@@ -83,13 +111,24 @@ class GeneticAlgorithm:
         self._Generations = []
         self._Generation = namedtuple('Generation',
                             ['gen_num', 'mean_score', 'best_ind'])
-        self._columns = []
 
     def _create_individual(self):
-        return np.reshape(np.random.choice(len(self.__operators),
+        """Return new individual.
+
+        Returns:
+            Array of integers.
+
+        """
+        return np.reshape(np.random.choice(self.n_operators,
                         self.n_features, replace=False), (-1, self.n_features))
 
     def _create_population(self):
+        """Return new population.
+
+        Returns:
+            Array of individuals (integers).
+
+        """
         population = np.empty((0, self.n_features), dtype=np.int8)
         for i, member in enumerate(range(self.pop_members)):
             population = np.append(population, self._create_individual(),
@@ -106,6 +145,22 @@ class GeneticAlgorithm:
         return population
 
     def _apply_function(self, i, col, feature):
+        """Transform a dataset along given axis.
+
+        Args:
+            i : int
+                Index of an individual in a given population.
+
+            col : int
+                Column index to perform operation on.
+
+            feature : int
+                Index of an operator used for data transformation.
+
+        Returns:
+            Array.
+
+        """
         if (feature <= 1):
             return np.nan_to_num(np.nanmean(np.apply_along_axis(
                                 self.__operators[feature], 1, self.X), axis=1))
@@ -127,16 +182,55 @@ class GeneticAlgorithm:
             return np.nan_to_num(vfunc(self.X[:, col1], self.X[:, col2]))
 
     def _transform(self, i, member):
+        """Transform a dataset performing mathematical operations.
+
+        Args:
+            i : int
+                Index of an individual in a given population.
+
+            member : int array
+                Array of indices of mathematical operators.
+
+        Returns:
+            Transformed dataset, array-like.
+
+        """
         z = np.zeros((self.X.shape[0], self.n_features), dtype=self.X.dtype)
         for col, feature in enumerate(member):
             z[:, col] = self._apply_function(i, col, feature)
         return np.concatenate((z, self.X), axis=1)
 
     def _get_fitness(self, clf, X, y):
+        """Compute the scores based on the testing set for each iteration of cross-validation.
+
+        Args:
+            clf : classifier object implementing 'fit'
+                Classfier used for scoring new features.
+
+            X : array-like
+                The data to fit.
+
+            y : array-like
+                The target variable.
+
+        Returns:
+            Cross-validation score for a given dataset.
+
+        """
         return cross_val_score(clf, X, y,
                             scoring=self.metric, cv=self.fold, n_jobs=-1).mean()
 
     def _select_parents(self, q=4):
+        """Select parents from a population of individuals using tournament selection.
+
+        Args:
+            q : int
+                Tournament size.
+
+        Returns:
+            Array of integers.
+
+        """
         parents = np.empty((0, q), dtype=np.int8)
         for i in range(self.pop_members-self.migrants-self.elite):
             parent = np.random.choice(
@@ -147,6 +241,19 @@ class GeneticAlgorithm:
         return np.reshape(parents, (len(parents)//2, 2))
 
     def _crossover(self, parents, population):
+        """Produce a child solution from two parents using uniform crossover scheme.
+
+        Args:
+            parents : array of integers
+                Indices of parents from a given population.
+
+            population : list of tuples
+                List of individuals and their fitness.
+
+        Returns:
+            Array of integers.
+
+        """
         new_population = np.empty((0, self.n_features), dtype=np.int8)
         children = np.empty((0, self.n_features), dtype=np.int8)
         population = deepcopy(population)
@@ -165,12 +272,35 @@ class GeneticAlgorithm:
         return new_population
 
     def _mutate(self, new_population, std):
+        """Alter gene values in an individual.
+
+        Args:
+            new_population : array of integers
+                Array of individuals.
+
+            std : float
+                Standard deviation of the indices of mathematical operators chosen in the previous generation.
+
+        Returns:
+            Array of integers.
+
+        """
         std = int(round(std))
         mutation = np.random.randint(-std-1, std+1, size=new_population.shape)
-        new_population = (new_population + mutation) % len(self.__operators)
+        new_population = (new_population + mutation) % self.n_operators
         return new_population
 
     def _create_next_generation(self, population):
+        """Create next generation.
+
+        Args:
+            population : list of tuples
+                Previous generation.
+
+        Returns:
+            New population, array of integers.
+
+        """
         population = sorted(population, key=attrgetter('score'), reverse=True)
         parents = self._select_parents()
         new_population = self._crossover(parents, population)
@@ -198,6 +328,16 @@ class GeneticAlgorithm:
         return new_population
 
     def fit(self, X, y):
+        """Fit estimator.
+
+        Args:
+            X : array-like
+                The data to fit.
+
+            y : array-like
+                The target variable.
+
+        """
         self.X = np.asarray(X)
         self.y = np.asarray(y).reshape(y.shape[0], )
         self.n_features = np.random.random_integers(2*self.X.shape[1])
@@ -212,12 +352,12 @@ class GeneticAlgorithm:
 
         end_time = datetime.now() + timedelta(minutes=self.duration)
         while datetime.now() < end_time:
-            for j, member in enumerate(tqdm(population, desc='Individual',
+            for i, member in enumerate(tqdm(population, desc='Individual',
                                                                 leave=False)):
-                new_X = self._transform(j, member)
+                new_X = self._transform(i, member)
                 score = self._get_fitness(self.clf, new_X, self.y)
                 self._individuals.append(self._Individual(member,
-                                            self._columns[j], score))
+                                            self._columns[i], score))
             self._Generations.append(self._individuals)
 
             best = sorted(self._individuals, key=lambda tup: tup.score,
@@ -256,6 +396,19 @@ class GeneticAlgorithm:
                 print("Average score: ", avg/best.count)
 
     def transform(self, X, individual):
+        """Transform dataset into new one using created features.
+
+        Args:
+            X : array-like
+                The data to transform.
+
+            individual : tuple
+                Tuple with a set of features.
+
+        Returns:
+            New dataset, array-like.
+
+        """
         z = np.zeros((X.shape[0], self.n_features), dtype=X.dtype)
         for col, feature in enumerate(individual.transformations):
             if (feature <= 1):
@@ -280,6 +433,7 @@ class GeneticAlgorithm:
         return np.concatenate((z, X), axis=1)
 
     def get_params(self):
+        """Print best set of new features."""
         print('Best params:')
         for i, feature in enumerate(self._best_score.transformations):
             if (feature <= 1 and feature <= 12):
@@ -293,6 +447,12 @@ class GeneticAlgorithm:
             print('Logloss: {}'.format(-self._best_score.score))
 
     def save(self, filename):
+        """Save the best set of features to a file.
+
+        Args:
+            filename : string
+
+        """
         with io.open(filename, 'w', encoding='utf8') as outfile:
             individual = self._Individual(self._best_score.transformations.tolist(),
                 [x.tolist() for x in self._best_score.columns], self._best_score.score)
@@ -305,5 +465,14 @@ class GeneticAlgorithm:
                 outfile.write(str(ind))
 
     def load(self, filename):
+        """Load a set of features from a file.
+
+        Args:
+            filename : string
+
+        Returns:
+            Tuple with a set of features.
+
+        """
         with open(filename) as infile:
             return self._Individual(**json.load(infile))
