@@ -44,18 +44,30 @@ class FeatureConstructor:
         """
         self.ga.fit(X, y)
 
-    def get_params(self):
-        """Print best set of new features."""
-        self.ga.get_params()
+    def get_params(self, ind='best'):
+        """Print best or most frequent set of new features.
 
-    def save(self, filename):
-        """Save the best set of features to a file.
+        Args:
+            ind : string, 'best' or 'most_freq'
+                Determines which set of features save to a file.
+
+        """
+        self.ga.get_params(ind)
+
+    def save(self, filename, ind='best'):
+        """Save the best or most frequent set of features to a file.
 
         Args:
             filename : string
 
+            ind : string, 'best' or 'most_freq'
+                Determines which set of features save to a file.
+
         """
-        self.ga.save(filename)
+        if ind == 'best' or ind == 'most_freq':
+            self.ga.save(filename)
+        else:
+            raise ValueError("ind must be 'best' or 'most_freq'.")
 
     def load(self, filename):
         """Load a set of features from a file.

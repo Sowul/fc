@@ -332,13 +332,12 @@ class GeneticAlgorithm:
         """
         self.X = np.asarray(X)
         self.y = np.asarray(y).reshape(y.shape[0], )
-        self.n_features = np.random.random_integers(10)
-        # tu pomyśleć
+        self.n_features = np.random.random_integers(5)
         #self.n_features = np.random.random_integers(2*self.X.shape[1])
 
         self._base_score = cross_val_score(self.clf, self.X, self.y,
                                        scoring=self.metric, cv=self.fold).mean()
-        print("Base score: ", self._base_score)
+        print("Base score: {}\n".format(self._base_score))
         self._best_score = self._base_score
 
         population = self._create_population()
@@ -379,15 +378,10 @@ class GeneticAlgorithm:
             self._individuals = []
             gen += 1
         else:
-            best = sorted(self._best_individuals, key=lambda tup: tup.count,
+            self._most_freq = sorted(self._best_individuals, key=lambda tup: tup.count,
                             reverse=True)[0]
-            if(best.count > 1):
-                avg = 0
-                for elem in self._best_individuals:
-                    if(list(best.transformations) == list(elem.transformations)):
-                        avg += elem.score
-                print("Most frequent individual: ", best)
-                print("Average score: ", avg/best.count)
+            #self._most_freq = self._Individual(self._most_freq.transformations,
+               #                     self._most_freq.columns, self._most_freq.score)
 
     def transform(self, X, individual):
         """Transform dataset into new one using created features.
@@ -426,37 +420,80 @@ class GeneticAlgorithm:
                 z[:, col] = np.nan_to_num(vfunc(X[:, col1], X[:, col2]))
         return np.concatenate((z, X), axis=1)
 
-    def get_params(self):
-        """Print best set of new features."""
-        print('Best params:')
-        for i, feature in enumerate(self._best_score.transformations):
-            if (feature <= 12):
-                print('\tfeature {}: {} every row'.format(i, self.__operators[feature].__name__))
-            elif (feature > 12 and feature <= 26):
-                print('\tfeature {}: {} col {}'.format(i, self.__operators[feature].__name__, self._best_score.columns[i][0]))
-            else:
-                print('\tfeature {}: {} cols {} and {}'.format(i, self.__operators[feature].__name__,
-                        self._best_score.columns[i][0], self._best_score.columns[i][1]))
-        else:
-            print('neg_log_loss: {}'.format(self._best_score.score))
+    def get_params(self, ind='best'):
+        """Print best or most frequent set of new features.
 
-    def save(self, filename):
+        Args:
+            ind : string, 'best' or 'most_freq'
+                Determines which set of features save to a file.
+
+        """
+        if ind == 'best':
+            print('Best params:')
+            for i, feature in enumerate(self._best_score.transformations):
+                if (feature <= 12):
+                    print('\tfeature {}: {} every row'.format(i, self.__operators[feature].__name__))
+                elif (feature > 12 and feature <= 26):
+                    print('\tfeature {}: {} col {}'.format(i, self.__operators[feature].__name__, self._best_score.columns[i][0]))
+                else:
+                    print('\tfeature {}: {} cols {} and {}'.format(i, self.__operators[feature].__name__,
+                            self._best_score.columns[i][0], self._best_score.columns[i][1]))
+            else:
+                print('neg_log_loss: {}\n'.format(self._best_score.score))
+        elif ind == 'most_freq':
+            avg = 0
+            #count = 0
+            for elem in self._best_individuals:
+                if(list(self._most_freq.transformations) == list(elem.transformations)):
+                    #count += 1
+                    avg += elem.score
+            print("Most frequent individual ({} times, average score {}): ".format(
+                                   self._most_freq.count, avg/self._most_freq.count))
+            for i, feature in enumerate(self._most_freq.transformations):
+                if (feature <= 12):
+                    print('\tfeature {}: {} every row'.format(i, self.__operators[feature].__name__))
+                elif (feature > 12 and feature <= 26):
+                    print('\tfeature {}: {} col {}'.format(i, self.__operators[feature].__name__, self._most_freq.columns[i][0]))
+                else:
+                    print('\tfeature {}: {} cols {} and {}'.format(i, self.__operators[feature].__name__,
+                            self._most_freq.columns[i][0], self._most_freq.columns[i][1]))
+            else:
+                print('neg_log_loss: {}\n'.format(self._most_freq.score))
+        else:
+            pass
+
+
+    def save(self, filename, ind='best'):
         """Save the best set of features to a file.
 
         Args:
             filename : string
 
+            ind : string, 'best' or 'most_freq'
+                Determines which set of features save to a file.
+
         """
+        def dump_to_dict(ind):
+            individual = tuple()
+            if ind == 'best':
+                individual = self._Individual(self._best_score.transformations.tolist(),
+                    [x.tolist() for x in self._best_score.columns], self._best_score.score)
+            elif ind == 'most_freq':
+                individual = self._Individual(self._most_freq.transformations.tolist(),
+                    [x.tolist() for x in self._most_freq.columns], self._most_freq.score)
+            else:
+                raise ValueError("ind must be 'best' or 'most_freq'.")
+            individual = json.dumps(individual._asdict(), indent=4,
+                    separators=(',', ': '), ensure_ascii=False)
+            return individual
+
         with io.open(filename, 'w', encoding='utf8') as outfile:
-            individual = self._Individual(self._best_score.transformations.tolist(),
-                [x.tolist() for x in self._best_score.columns], self._best_score.score)
-            ind = json.dumps(individual._asdict(), indent=4,
-                                separators=(',', ': '), ensure_ascii=False)
+            individual = dump_to_dict(ind)
             from sys import version_info
             if version_info < (3, 0):
-                outfile.write(unicode(ind))
+                outfile.write(unicode(individual))
             else:
-                outfile.write(str(ind))
+                outfile.write(str(individual))
 
     def load(self, filename):
         """Load a set of features from a file.
@@ -468,5 +505,5 @@ class GeneticAlgorithm:
             Tuple with a set of features.
 
         """
-        with open(filename) as infile:
-            return self._Individual(**json.load(infile))
+        with open(filename) as in_file:
+            return self._Individual(**json.load(in_file))
