@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import io
 import json
 from operator import attrgetter
+import warnings
+warnings.filterwarnings('ignore')
 
 import numpy as np
 from sklearn.model_selection import cross_val_score
@@ -78,25 +80,15 @@ class GeneticAlgorithm:
                             np.floor,
                             np.ceil,
                             np.trunc,
-                            np.exp,
-                            np.expm1,
-                            np.exp2,
                             np.log1p,
                             np.sinc,
-                            np.reciprocal,
                             np.negative,
                             np.sqrt,
                             np.fabs,
                             np.sign,
-                            np.logaddexp,
-                            np.logaddexp2,
                             np.add,
                             np.multiply,
-                            np.divide,
-                            np.power,
                             np.subtract,
-                            np.true_divide,
-                            np.floor_divide,
                             np.mod]
         self.n_operators = len(self.__operators)
         self._columns = []
@@ -120,7 +112,7 @@ class GeneticAlgorithm:
 
         """
         return np.reshape(np.random.choice(self.n_operators,
-                        self.n_features, replace=False), (-1, self.n_features))
+                        self.n_features, replace=True), (-1, self.n_features))
 
     def _create_population(self):
         """Return new population.
@@ -137,7 +129,7 @@ class GeneticAlgorithm:
             for feature in population[i]:
                 if feature <= 12:
                     cols.append(np.array([-1]))
-                elif (feature > 12 and feature <= 30):
+                elif (feature > 12 and feature <= 26):
                     cols.append(np.random.randint(self.X.shape[1], size=1))
                 else:
                     cols.append(np.random.randint(self.X.shape[1], size=2))
@@ -171,7 +163,7 @@ class GeneticAlgorithm:
             else:
                 return np.nan_to_num(np.apply_along_axis(
                                 self.__operators[feature], 1, self.X))
-        elif (feature > 12 and feature <= 30):
+        elif (feature > 12 and feature <= 26):
             col1 = self._columns[i][col][0]
             vfunc = np.vectorize(self.__operators[feature])
             return np.nan_to_num(vfunc(self.X[:, col1]))
@@ -315,7 +307,7 @@ class GeneticAlgorithm:
             for feature in ind:
                 if feature <= 12:
                     cols.append(np.array([-1]))
-                elif (feature > 12 and feature <= 30):
+                elif (feature > 12 and feature <= 26):
                     cols.append(np.random.randint(self.X.shape[1], size=1))
                 else:
                     cols.append(np.random.randint(self.X.shape[1], size=2))
@@ -340,7 +332,9 @@ class GeneticAlgorithm:
         """
         self.X = np.asarray(X)
         self.y = np.asarray(y).reshape(y.shape[0], )
-        self.n_features = np.random.random_integers(2*self.X.shape[1])
+        self.n_features = np.random.random_integers(10)
+        # tu pomyśleć
+        #self.n_features = np.random.random_integers(2*self.X.shape[1])
 
         self._base_score = cross_val_score(self.clf, self.X, self.y,
                                        scoring=self.metric, cv=self.fold).mean()
@@ -421,7 +415,7 @@ class GeneticAlgorithm:
                 else:
                     z[:, col] = np.nan_to_num(np.apply_along_axis(
                                     self.__operators[feature], 1, X))
-            elif (feature > 12 and feature <= 30):
+            elif (feature > 12 and feature <= 26):
                 col1 = individual.columns[col][0]
                 vfunc = np.vectorize(self.__operators[feature])
                 z[:, col] = np.nan_to_num(vfunc(X[:, col1]))
@@ -436,15 +430,15 @@ class GeneticAlgorithm:
         """Print best set of new features."""
         print('Best params:')
         for i, feature in enumerate(self._best_score.transformations):
-            if (feature <= 1 and feature <= 12):
+            if (feature <= 12):
                 print('\tfeature {}: {} every row'.format(i, self.__operators[feature].__name__))
-            elif (feature > 12 and feature <= 30):
+            elif (feature > 12 and feature <= 26):
                 print('\tfeature {}: {} col {}'.format(i, self.__operators[feature].__name__, self._best_score.columns[i][0]))
             else:
                 print('\tfeature {}: {} cols {} and {}'.format(i, self.__operators[feature].__name__,
                         self._best_score.columns[i][0], self._best_score.columns[i][1]))
         else:
-            print('Logloss: {}'.format(-self._best_score.score))
+            print('neg_log_loss: {}'.format(self._best_score.score))
 
     def save(self, filename):
         """Save the best set of features to a file.
