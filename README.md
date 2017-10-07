@@ -1,6 +1,4 @@
-# fc
-
-## About
+# fc [![Build Status](https://travis-ci.org/Sowul/fc.svg?branch=master)](https://travis-ci.org/Sowul/fc)
 
 What is the best representation of the data to solve a problem? Find out using FeatureConstructor powered by genetic algorithm.<br> All you need is a classifier object implementing 'fit' method and this simple script (works both with Python 2 and 3).<br>
 Sometimes it yields great results out of the box (check out sample outputs for 2d_circles and 3d_spheres examples), sometimes you have to do a bit more beforehand (aka pre-processing your data, diabetes and spam examples).
@@ -64,7 +62,7 @@ Transform raw dataset into new, hopefully better one
 ```
 ## Examples
 
-Check out examples directory (especially examples/iris which shows how to get data for plotting).
+Check out examples directory.
 
 ## Tests
 
