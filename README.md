@@ -71,4 +71,4 @@ $ python -m pytest tests
 ```
 
 ## License
-[The MIT License](LICENSE.md)
+[The MIT License](LICENSE)
