@@ -3,8 +3,6 @@
 
 from __future__ import print_function
 
-__author__ = "Bartosz Sowul"
-
 from collections import namedtuple
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -14,6 +12,7 @@ from operator import attrgetter
 import warnings
 warnings.filterwarnings('ignore')
 
+import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.model_selection import cross_val_score
 from tqdm import trange, tqdm
@@ -332,8 +331,7 @@ class GeneticAlgorithm:
         """
         self.X = np.asarray(X)
         self.y = np.asarray(y).reshape(y.shape[0], )
-        self.n_features = np.random.random_integers(5)
-        #self.n_features = np.random.random_integers(2*self.X.shape[1])
+        self.n_features = np.random.random_integers(10)
 
         self._base_score = cross_val_score(self.clf, self.X, self.y,
                                        scoring=self.metric, cv=self.fold).mean()
@@ -380,8 +378,6 @@ class GeneticAlgorithm:
         else:
             self._most_freq = sorted(self._best_individuals, key=lambda tup: tup.count,
                             reverse=True)[0]
-            #self._most_freq = self._Individual(self._most_freq.transformations,
-               #                     self._most_freq.columns, self._most_freq.score)
 
     def transform(self, X, individual):
         """Transform dataset into new one using created features.
@@ -442,10 +438,8 @@ class GeneticAlgorithm:
                 print('neg_log_loss: {}\n'.format(self._best_score.score))
         elif ind == 'most_freq':
             avg = 0
-            #count = 0
             for elem in self._best_individuals:
                 if(list(self._most_freq.transformations) == list(elem.transformations)):
-                    #count += 1
                     avg += elem.score
             print("Most frequent individual ({} times, average score {}): ".format(
                                    self._most_freq.count, avg/self._most_freq.count))
@@ -507,3 +501,17 @@ class GeneticAlgorithm:
         """
         with open(filename) as in_file:
             return self._Individual(**json.load(in_file))
+
+    def plot(self):
+        """Plot data from the genetic algorithm."""
+        mean_score = [x[1] for x in self._gen_score]
+        best_score = [x[2][3] for x in self._gen_score]
+
+        plt.plot(self._best_score.gen_num, self._best_score.score, 'ro')
+        plt.plot([0, len(mean_score)], [self._base_score, self._base_score], 'b--', lw=2)
+        plt.plot(range(len(mean_score)), mean_score, 'k', label='mean')
+        plt.plot(range(len(best_score)), best_score, 'g', label='best')
+        plt.xlabel('generation')
+        plt.ylabel(self.metric)
+        plt.legend(loc='upper left')
+        plt.show()
