@@ -5,6 +5,7 @@ from collections import Counter
 from copy import deepcopy
 from filecmp import cmp
 from operator import attrgetter
+from os import remove
 
 import numpy as np
 import pytest
@@ -22,7 +23,7 @@ def ga():
     ga.X = np.asarray(iris.data)
     ga.y = np.asarray(iris.target)
     ga.y = ga.y.reshape(ga.y.shape[0], )
-    ga.n_features = np.random.random_integers(2*ga.X.shape[1])
+    ga.n_features = np.random.random_integers(10)
     return ga
 
 @pytest.fixture(scope='module')
@@ -35,12 +36,12 @@ def ga_fitted():
     return ga
 
 def test_ga_create_individual(ga):
-    assert np.array_equal(ga._create_individual(), np.array([[30, 21]])) == True
+    print(ga._create_individual().shape)
+    assert ga._create_individual().shape == (1, ga.n_features)
 
 def test_ga_create_population(ga):
     ga.pop_members = 5
-    assert np.array_equal(ga._create_population(),
-            np.array([[30, 21], [3, 19], [7, 11], [37, 12], [15, 18]])) == True
+    assert ga._create_population().shape == (ga.pop_members, ga.n_features)
 
 def test_ga_apply_function(ga):
     ga.pop_members = 5
@@ -50,9 +51,7 @@ def test_ga_apply_function(ga):
         for col, feature in enumerate(member):
             z[:, col] = ga._apply_function(i, col, feature)
     assert ga.X.shape[0] == z.shape[0]
-    assert z.shape[1] == ga.n_features
-    assert np.array_equal(z[:5],
-                            [[1.,1.],[1.,1.],[1.,1.],[2.,1.],[1.,1.]]) == True
+    assert ga.n_features == z.shape[1]
 
 def test_ga_transform(ga):
     ga.pop_members = 5
@@ -61,11 +60,6 @@ def test_ga_transform(ga):
         new_X = ga._transform(j, member)
     assert ga.X.shape[0] == new_X.shape[0]
     assert ga.X.shape[1]+ga.n_features == new_X.shape[1]
-    assert np.array_equal(new_X[-4:],
-                            [[ 5. ,  5. ,  6.3,  2.5,  5. ,  1.9],
-                            [ 5. ,  5. ,  6.5,  3. ,  5.2,  2. ],
-                            [ 5. ,  5. ,  6.2,  3.4,  5.4,  2.3],
-                            [ 5. ,  5. ,  5.9,  3. ,  5.1,  1.8]]) == True
 
 def test_ga_get_fitness(ga):
     ga.pop_members = 5
@@ -146,5 +140,16 @@ def test_ga_transform(ga_fitted):
 def test_ga_save_load(ga_fitted):
     ga_fitted.save('tests/ga_saved_ind.json')
     loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
-    assert np.array_equal(ga_fitted._best_score.transformations, loaded_ind.transformations) == True
-    assert np.array_equal(ga_fitted._best_score.columns, loaded_ind.columns) == True
+    assert np.array_equal(ga_fitted._best_score.transformations.tolist(), loaded_ind.transformations) == True
+    assert np.array_equal([x.tolist() for x in ga_fitted._best_score.columns], loaded_ind.columns) == True
+    remove('tests/ga_saved_ind.json')
+    ga_fitted.save('tests/ga_saved_ind.json', 'best')
+    loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
+    assert np.array_equal(ga_fitted._best_score.transformations.tolist(), loaded_ind.transformations) == True
+    assert np.array_equal([x.tolist() for x in ga_fitted._best_score.columns], loaded_ind.columns) == True
+    remove('tests/ga_saved_ind.json')
+    ga_fitted.save('tests/ga_saved_ind.json', 'most_freq')
+    loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
+    assert np.array_equal(ga_fitted._most_freq.transformations.tolist(), loaded_ind.transformations) == True
+    assert np.array_equal([x.tolist() for x in ga_fitted._most_freq.columns], loaded_ind.columns) == True
+    remove('tests/ga_saved_ind.json')
