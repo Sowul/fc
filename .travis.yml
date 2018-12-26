@@ -4,6 +4,11 @@ python:
   - 3.5
   - 3.6
   - 3.7
+matrix:
+  include:
+    - python: 3.7
+      dist: xenial
+      sudo: true
 install:
   - sudo apt-get update
   - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
@@ -20,9 +25,9 @@ install:
   - conda info -a
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
   - source activate test-environment
-  - conda install -c conda-forge coveralls dill matplotlib numexpr numpy pandas pathos pip pytest pytest-cov scikit-learn scipy six tqdm
+  - conda install -c conda-forge coveralls dill future matplotlib numexpr numpy pandas pathos pip pytest pytest-cov scikit-learn scipy six tqdm
 script:
-  - python -m pytest --cov=ga
+  - python -m pytest --cov=fa --cov=ga
 after_success:
   - if [[ "$TRAVIS_PYTHON_VERSION" == "3.7" ]]; then
       coveralls;
