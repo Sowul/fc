@@ -5,10 +5,24 @@ python:
   - 3.6
   - 3.7
 install:
-  - pip install -r requirements.txt
-  - pip install pytest-cov coveralls
+  - sudo apt-get update
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda config --add channels conda-forge
+  - conda update -q conda
+  - conda info -a
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
+  - source activate test-environment
+  - conda install -c conda-forge coveralls dill matplotlib numexpr numpy pandas pathos pip pytest pytest-cov scikit-learn scipy six tqdm
 script:
-  - python -m pytest --cov=fc --cov=ga
+  - python -m pytest --cov=ga
 after_success:
   - if [[ "$TRAVIS_PYTHON_VERSION" == "3.7" ]]; then
       coveralls;
