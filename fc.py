@@ -6,7 +6,7 @@ from ga import GeneticAlgorithm
 class FeatureConstructor:
     """Create new features using genetic algorithm."""
 
-    def __init__(self, clf, fold, duration):
+    def __init__(self, clf, fold, duration=None, max_iter=None, base_included=True):
         """Init method.
 
         Args:
@@ -20,14 +20,21 @@ class FeatureConstructor:
             duration : int
                 Determines how many minutes a genetic algorithm runs.
 
+            max_iter : int
+                Determines how many iterations a genetic algorithm runs.
+
+            base_included : bool
+                Determines whether or not the base dataset is included during the evaluation of newly created features.
+
             ga : GeneticAlgorithm
                 Object used for creating new sets of features.
-
         """
         self.clf = clf
         self.fold = fold
         self.duration = duration
-        self.ga = GeneticAlgorithm(clf, fold, duration)
+        self.max_iter = max_iter
+        self.base_included = base_included
+        self.ga = GeneticAlgorithm(clf, fold, duration, max_iter, base_included)
 
     def fit(self, X, y):
         """Fit estimator.

@@ -11,11 +11,11 @@ from setuptools import find_packages, setup
 NAME = 'fc'
 DESCRIPTION = 'Genetic algorithm for feature engineering. '
 URL = 'https://github.com/Sowul/fc'
-EMAIL = 'bartosz.sowul@protonmail.com'
+EMAIL = 'bartosz.sowul@pm.me'
 AUTHOR = 'Bartosz Sowul'
 
 REQUIRED = [
-    'matplotlib', 'numpy', 'tqdm', 'scikit_learn',
+    'matplotlib', 'numexpr', 'numpy', 'pathos', 'scikit_learn', 'six', 'tqdm',
 ]
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -47,5 +47,6 @@ setup(
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
 )

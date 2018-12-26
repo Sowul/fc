@@ -15,7 +15,7 @@ from fc import FeatureConstructor
 def fc():
     np.random.seed(10)
     clf = RandomForestClassifier(max_depth=3, random_state=2222)
-    fc = FeatureConstructor(clf, 5, 0.5)
+    fc = FeatureConstructor(clf, 5, duration=0.5)
     iris = load_iris()
     fc.fit(iris.data, iris.target)
     return fc

@@ -19,7 +19,7 @@ def ga():
     np.random.seed(10)
     iris = load_iris()
     clf = RandomForestClassifier(max_depth=3, random_state=2222)
-    ga = GeneticAlgorithm(clf, 5, 0.5)
+    ga = GeneticAlgorithm(clf, cv=5, duration=0.5)
     ga.X = np.asarray(iris.data)
     ga.y = np.asarray(iris.target)
     ga.y = ga.y.reshape(ga.y.shape[0], )
@@ -30,11 +30,24 @@ def ga():
 def ga_fitted():
     np.random.seed(10)
     clf = RandomForestClassifier(max_depth=3, random_state=2222)
-    ga = GeneticAlgorithm(clf, 5, 0.5)
+    ga = GeneticAlgorithm(clf, 5, duration=0.5)
     iris = load_iris()
     ga.fit(iris.data, iris.target)
     return ga
 
+def test_ga_init():
+    clf = RandomForestClassifier(max_depth=3, random_state=2222)
+    with pytest.raises(ValueError):
+        ga = GeneticAlgorithm(clf, 5)
+    with pytest.raises(ValueError):
+        ga = GeneticAlgorithm(clf, 5, duration='s')
+    with pytest.raises(ValueError):
+        ga = GeneticAlgorithm(clf, 5, max_iter=0.5)
+    with pytest.raises(ValueError):
+        ga = GeneticAlgorithm(clf, 5, 1, 1)
+    with pytest.raises(ValueError):
+        ga = GeneticAlgorithm(clf, 5, base_included='s')
+        
 def test_ga_create_individual(ga):
     print(ga._create_individual().shape)
     assert ga._create_individual().shape == (1, ga.n_features)
@@ -140,8 +153,8 @@ def test_ga_transform(ga_fitted):
 def test_ga_save_load(ga_fitted):
     ga_fitted.save('tests/ga_saved_ind.json')
     loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
-    assert np.array_equal(ga_fitted._best_score.transformations.tolist(), loaded_ind.transformations) == True
-    assert np.array_equal([x.tolist() for x in ga_fitted._best_score.columns], loaded_ind.columns) == True
+    assert np.array_equal(ga_fitted._most_freq.transformations.tolist(), loaded_ind.transformations) == True
+    assert np.array_equal([x.tolist() for x in ga_fitted._most_freq.columns], loaded_ind.columns) == True
     remove('tests/ga_saved_ind.json')
     ga_fitted.save('tests/ga_saved_ind.json', 'best')
     loaded_ind = ga_fitted.load('tests/ga_saved_ind.json')
@@ -153,3 +166,7 @@ def test_ga_save_load(ga_fitted):
     assert np.array_equal(ga_fitted._most_freq.transformations.tolist(), loaded_ind.transformations) == True
     assert np.array_equal([x.tolist() for x in ga_fitted._most_freq.columns], loaded_ind.columns) == True
     remove('tests/ga_saved_ind.json')
+    with pytest.raises(ValueError):
+        ga_fitted.save(1)
+    with pytest.raises(ValueError):
+        loaded_ind = ga_fitted.load(1)

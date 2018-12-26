@@ -42,7 +42,7 @@ Fit data
 ```
 Print best params
 ```python
->>> fc.get_params()
+>>> fc.get_params('best')
 ```
 Or most frequent params
 ```python

@@ -1,67 +1,79 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import division
 from __future__ import print_function
 
+from builtins import int
 from collections import namedtuple
 from copy import deepcopy
 from datetime import datetime, timedelta
 import io
 import json
+import multiprocessing
 from operator import attrgetter
-import warnings
-warnings.filterwarnings('ignore')
+from timeit import default_timer as timer
+import sys
 
+import dill as pickle
 import matplotlib.pyplot as plt
+import numexpr as ne
 import numpy as np
+from pathos.multiprocessing import ProcessPool
+from six import integer_types, string_types, text_type
+from sklearn.base import clone
 from sklearn.model_selection import cross_val_score
 from tqdm import trange, tqdm
 
 class GeneticAlgorithm:
     """Algorithm used for creating new features."""
 
-    def __init__(self, clf, fold, duration):
+    def __init__(self, clf, cv=5, duration=None, max_iter=None, base_included=True):
         """Init method.
 
         Args:
             clf : classifier object implementing 'fit'
                 Classfier used for scoring new features.
 
-            fold : int, cross-validation generator or an iterable
+            cv : int, cross-validation generator or an iterable
                 Determines the cross-validation splitting strategy,
                 see also http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.cross_val_score.html.
 
-            duration : int
+            duration : float
                 Determines how many minutes a genetic algorithm runs.
 
-            metric :
-                Metric used for scoring new features,
-                see also http://scikit-learn.org/stable/modules/model_evaluation.html#common-cases-predefined-values.
+            max_iter : int
+                Determines how many iterations a genetic algorithm runs.
 
-            pop_members : int
-                Determines how big the population is.
-
-            elite : int
-                Determines how many individuals are guaranteed a place in the next generation.
-
-            migrants : int
-                Determines how many new individuals (possible solutions in a search space) are created (migrate) each generation.
-
-            n_operators : int
-                Length of a list of operators used for transforming a dataset.
-
+            base_included : bool
+                Determines whether or not the base dataset is included during the evaluation of newly created features.
         """
+        if all(var is not None for var in (duration, max_iter)):
+            raise ValueError('Duration and max_iter variables are both not None. One of them should be None.')
+        if all(var is None for var in (duration, max_iter)):
+            raise ValueError('Duration and max_iter variables are both None. Only one of them should be None.')
+        if duration is not None:
+            if isinstance(duration, (integer_types, float)):
+                self.duration = duration
+                self.max_iter = max_iter
+            else:
+                raise ValueError('Duration value must be a float or an integer.')
+        else:
+            if isinstance(max_iter, integer_types):
+                self.max_iter = max_iter
+                self.duration = duration
+            else:
+                raise ValueError('Max_iter value must be an integer.')
         self.clf = clf
-        self.fold = fold
-        self.duration = duration
+        self.cv = cv
         self.metric = 'neg_log_loss'
         self.pop_members = 100
         self.elite = 4
         self.migrants = 6
         self.__operators = [np.diff,
                             np.gradient,
-                            np.nanprod,
-                            np.nansum,
+                            np.nanprod,#2
+                            np.nansum,#3
                             np.nanmax,
                             np.nanmin,
                             np.ptp,
@@ -71,24 +83,24 @@ class GeneticAlgorithm:
                             np.nanstd,
                             np.nanvar,
                             np.trapz,
-                            np.sin,
-                            np.cos,
+                            np.sin,#13
+                            np.cos,#14
                             np.around,
                             np.rint,
                             np.fix,
                             np.floor,
                             np.ceil,
                             np.trunc,
-                            np.log1p,
+                            np.log1p,#21
                             np.sinc,
                             np.negative,
-                            np.sqrt,
-                            np.fabs,
-                            np.sign,
-                            np.add,
-                            np.multiply,
-                            np.subtract,
-                            np.mod]
+                            np.sqrt,#24
+                            np.fabs,#25
+                            np.sign,#26
+                            np.add,#27
+                            np.multiply,#28
+                            np.subtract,#29
+                            np.mod]#30
         self.n_operators = len(self.__operators)
         self._columns = []
         self._individuals = []
@@ -102,6 +114,19 @@ class GeneticAlgorithm:
         self._Generations = []
         self._Generation = namedtuple('Generation',
                             ['gen_num', 'mean_score', 'best_ind'])
+        self._unique_members = 0
+        self._skipped_members = 0
+        if isinstance(base_included, bool):
+            self._base_included = base_included
+        else:
+            raise ValueError('base_included value must be a bool.')
+        self._created_models = 0
+
+    def __repr__(self):
+        return '{}(clf={}, cv={},\n\t\tmetric={}, base_included={},\n\t\t{}={}, pop_members={})'.format(
+            self.__class__.__name__, self.clf.__class__.__name__, self.cv, self.metric, self._base_included,
+            'duration' if self.duration is not None else 'max_iter',
+            self.duration if self.duration is not None else self.max_iter, self.pop_members)
 
     def _create_individual(self):
         """Return new individual.
@@ -156,7 +181,13 @@ class GeneticAlgorithm:
             return np.nan_to_num(np.nanmean(np.apply_along_axis(
                                 self.__operators[feature], 1, self.X), axis=1))
         elif (feature > 1 and feature <= 12):
-            if (feature == 7):
+            if (feature == 2):#np.nanprod
+                arr = self.X
+                return np.nan_to_num(ne.evaluate('prod(arr, axis=1)'))
+            elif (feature == 3):#np.nansum
+                arr = self.X
+                return np.nan_to_num(ne.evaluate('sum(arr, axis=1)'))
+            elif (feature == 7):
                 return np.nan_to_num(np.apply_along_axis(
                                 self.__operators[feature], 1, self.X, 70))
             else:
@@ -164,13 +195,51 @@ class GeneticAlgorithm:
                                 self.__operators[feature], 1, self.X))
         elif (feature > 12 and feature <= 26):
             col1 = self._columns[i][col][0]
-            vfunc = np.vectorize(self.__operators[feature])
-            return np.nan_to_num(vfunc(self.X[:, col1]))
+            if (feature == 13):#np.sin
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('sin(arr)'))
+            elif (feature == 14):#np.cos
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('cos(arr)'))
+            elif (feature == 15):#np.around
+                return np.nan_to_num(self.__operators[feature](self.X[:, col1], decimals=2))
+            elif (feature == 21):#np.log1p
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('log1p(arr)'))
+            elif (feature == 24):#np.sqrt
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('sqrt(arr)'))
+            elif (feature == 25):#np.fabs
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('abs(arr)'))
+            elif (feature == 26):#np.sign
+                arr = self.X[:, col1]
+                return np.nan_to_num(ne.evaluate('-arr'))
+            else:
+                vfunc = np.vectorize(self.__operators[feature])
+                return np.nan_to_num(vfunc(self.X[:, col1]))
         else:
             col1 = self._columns[i][col][0]
             col2 = self._columns[i][col][1]
-            vfunc = np.vectorize(self.__operators[feature])
-            return np.nan_to_num(vfunc(self.X[:, col1], self.X[:, col2]))
+            if (feature == 27):#np.add
+                arr1 = self.X[:, col1]
+                arr2 = self.X[:, col2]
+                return np.nan_to_num(ne.evaluate('arr1 + arr2'))
+            elif (feature == 28):#np.multiply
+                arr1 = self.X[:, col1]
+                arr2 = self.X[:, col2]
+                return np.nan_to_num(ne.evaluate('arr1 * arr2'))
+            elif (feature == 29):#np.subtract
+                arr1 = self.X[:, col1]
+                arr2 = self.X[:, col2]
+                return np.nan_to_num(ne.evaluate('arr1 - arr2'))
+            elif (feature == 30):#np.mod
+                arr1 = self.X[:, col1]
+                arr2 = self.X[:, col2]
+                return np.nan_to_num(ne.evaluate('arr1 % arr2'))
+            else:
+                vfunc = np.vectorize(self.__operators[feature])
+                return np.nan_to_num(vfunc(self.X[:, col1], self.X[:, col2]))
 
     def _transform(self, i, member):
         """Transform a dataset performing mathematical operations.
@@ -186,10 +255,13 @@ class GeneticAlgorithm:
             Transformed dataset, array-like.
 
         """
-        z = np.zeros((self.X.shape[0], self.n_features), dtype=self.X.dtype)
+        z = np.empty((self.X.shape[0], self.n_features), dtype=self.X.dtype)
         for col, feature in enumerate(member):
             z[:, col] = self._apply_function(i, col, feature)
-        return np.concatenate((z, self.X), axis=1)
+        if self._base_included:
+            return np.concatenate((z, self.X), axis=1)
+        else:
+            return z
 
     def _get_fitness(self, clf, X, y):
         """Compute the scores based on the testing set for each iteration of cross-validation.
@@ -209,7 +281,7 @@ class GeneticAlgorithm:
 
         """
         return cross_val_score(clf, X, y,
-                            scoring=self.metric, cv=self.fold, n_jobs=-1).mean()
+                            scoring=self.metric, cv=self.cv, n_jobs=1).mean()
 
     def _select_parents(self, q=4):
         """Select parents from a population of individuals using tournament selection.
@@ -276,8 +348,7 @@ class GeneticAlgorithm:
             Array of integers.
 
         """
-        std = int(round(std))
-        mutation = np.random.randint(-std-1, std+1, size=new_population.shape)
+        mutation = np.random.randint(-int(std)-1, int(std)+1, size=new_population.shape) 
         new_population = (new_population + mutation) % self.n_operators
         return new_population
 
@@ -318,6 +389,11 @@ class GeneticAlgorithm:
             self._columns.append(population[i].columns)
         return new_population
 
+    def _score_ind(self, ind):
+        new_X = self._transform(ind[0], ind[1])
+        score = self._get_fitness(self.clf, new_X, self.y)
+        return self._Individual(ind[1], self._columns[ind[0]], score)
+
     def fit(self, X, y):
         """Fit estimator.
 
@@ -332,52 +408,104 @@ class GeneticAlgorithm:
         self.X = np.asarray(X)
         self.y = np.asarray(y).reshape(y.shape[0], )
         self.n_features = np.random.random_integers(10)
-
-        self._base_score = cross_val_score(self.clf, self.X, self.y,
-                                       scoring=self.metric, cv=self.fold).mean()
+        self._base_score = cross_val_score(self.clf, self.X, y=self.y,
+                                           scoring=self.metric, cv=self.cv).mean()
         print("Base score: {}\n".format(self._base_score))
         self._best_score = self._base_score
 
         population = self._create_population()
         gen = 0
+        total_time = 0
 
-        end_time = datetime.now() + timedelta(minutes=self.duration)
-        while datetime.now() < end_time:
-            for i, member in enumerate(tqdm(population, desc='Individual',
-                                                                leave=False)):
-                new_X = self._transform(i, member)
-                score = self._get_fitness(self.clf, new_X, self.y)
-                self._individuals.append(self._Individual(member,
-                                            self._columns[i], score))
-            self._Generations.append(self._individuals)
+        if self.duration is not None:
+            import math
+            ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(math.floor(n//10)%10!=1)*(n%10<4)*n%10::4])
 
-            best = sorted(self._individuals, key=lambda tup: tup.score,
-                            reverse=True)[0]
-            count = 1
-            if gen > 0:
-                for elem in self._best_individuals:
-                    if(list(best.transformations) == list(elem.transformations)):
-                        count += 1
+            end_time = datetime.now() + timedelta(minutes=self.duration)
+
+            while datetime.now() < end_time:
+                p = ProcessPool(nodes=multiprocessing.cpu_count())
+                print('Creating {} generation models...'.format(ordinal(gen)))
+                start = timer()
+                self._individuals = p.map(self._score_ind, list(enumerate(population)))
+
+                total_time = total_time + timer() - start
+
+                self._Generations.append(self._individuals)
+
+                best = sorted(self._individuals, key=lambda tup: tup.score,
+                                reverse=True)[0]
+                count = 1
+                if gen > 0:
+                    for elem in self._best_individuals:
+                        if(list(best.transformations) == list(elem.transformations)):
+                            count += 1
+                else:
+                    pass
+                self._best_individuals.append(
+                    self._BestIndividual(gen, best.transformations, best.columns,
+                                            best.score, count))
+                if (gen == 0):
+                    self._best_score = self._best_individuals[gen]
+                if (best.score > self._best_score.score):
+                    self._best_score = self._best_individuals[gen]
+                else:
+                    pass
+
+                self._gen_score.append(self._Generation(gen,
+                sum([tup[2] for tup in self._individuals])/len(self._individuals),
+                self._best_individuals[gen]))
+                
+                population = self._create_next_generation(self._individuals)
+                self._individuals = []
+                gen += 1
+                print('Done.')
             else:
-                pass
-            self._best_individuals.append(
-                self._BestIndividual(gen, best.transformations, best.columns,
-                                        best.score, count))
-            if (gen == 0):
-                self._best_score = self._best_individuals[gen]
-            if (best.score > self._best_score.score):
-                self._best_score = self._best_individuals[gen]
-            else:
-                pass
-            self._gen_score.append(self._Generation(gen,
-            sum([tup[2] for tup in self._individuals])/len(self._individuals),
-            self._best_individuals[gen]))
-            population = self._create_next_generation(self._individuals)
-            self._individuals = []
-            gen += 1
+                self._most_freq = sorted(self._best_individuals, key=lambda tup: tup.count,
+                                reverse=True)[0]
+                print('gen: {}'.format(gen))
+                print('avg time per gen: {0:0.1f}'.format(total_time/gen))
         else:
-            self._most_freq = sorted(self._best_individuals, key=lambda tup: tup.count,
-                            reverse=True)[0]
+            for i in trange(self.max_iter, desc='Generation', leave=False):
+                p = ProcessPool(nodes=multiprocessing.cpu_count())
+
+                start = timer()
+                self._individuals = p.map(self._score_ind, list(enumerate(population)))
+                total_time = total_time + timer() - start
+
+                self._Generations.append(self._individuals)
+
+                best = sorted(self._individuals, key=lambda tup: tup.score,
+                                reverse=True)[0]
+                count = 1
+                if gen > 0:
+                    for elem in self._best_individuals:
+                        if(list(best.transformations) == list(elem.transformations)):
+                            count += 1
+                else:
+                    pass
+                self._best_individuals.append(
+                    self._BestIndividual(gen, best.transformations, best.columns,
+                                            best.score, count))
+                if (gen == 0):
+                    self._best_score = self._best_individuals[gen]
+                if (best.score > self._best_score.score):
+                    self._best_score = self._best_individuals[gen]
+                else:
+                    pass
+
+                self._gen_score.append(self._Generation(gen,
+                sum([tup[2] for tup in self._individuals])/len(self._individuals),
+                self._best_individuals[gen]))
+                
+                population = self._create_next_generation(self._individuals)
+                self._individuals = []
+                gen += 1
+            else:
+                self._most_freq = sorted(self._best_individuals, key=lambda tup: tup.count,
+                                reverse=True)[0]
+                print('gen: {}'.format(gen))
+                print('avg time per gen: {0:0.1f}'.format(total_time/gen))
 
     def transform(self, X, individual):
         """Transform dataset into new one using created features.
@@ -393,7 +521,7 @@ class GeneticAlgorithm:
             New dataset, array-like.
 
         """
-        z = np.zeros((X.shape[0], self.n_features), dtype=X.dtype)
+        z = np.empty((X.shape[0], self.n_features), dtype=X.dtype)
         for col, feature in enumerate(individual.transformations):
             if (feature <= 1):
                 z[:, col] = np.nan_to_num(np.nanmean(np.apply_along_axis(
@@ -414,14 +542,17 @@ class GeneticAlgorithm:
                 col2 = individual.columns[col][1]
                 vfunc = np.vectorize(self.__operators[feature])
                 z[:, col] = np.nan_to_num(vfunc(X[:, col1], X[:, col2]))
-        return np.concatenate((z, X), axis=1)
+        if self._base_included:
+            return np.concatenate((z, X), axis=1)
+        else:
+            return z
 
-    def get_params(self, ind='best'):
+    def get_params(self, ind='most_freq'):
         """Print best or most frequent set of new features.
 
         Args:
             ind : string, 'best' or 'most_freq'
-                Determines which set of features save to a file.
+                Determines which set of features print.
 
         """
         if ind == 'best':
@@ -457,7 +588,7 @@ class GeneticAlgorithm:
             pass
 
 
-    def save(self, filename, ind='best'):
+    def save(self, filename, ind='most_freq'):
         """Save the best set of features to a file.
 
         Args:
@@ -481,13 +612,16 @@ class GeneticAlgorithm:
                     separators=(',', ': '), ensure_ascii=False)
             return individual
 
-        with io.open(filename, 'w', encoding='utf8') as outfile:
-            individual = dump_to_dict(ind)
-            from sys import version_info
-            if version_info < (3, 0):
-                outfile.write(unicode(individual))
-            else:
-                outfile.write(str(individual))
+        if isinstance(filename, (string_types, text_type)):
+            with io.open(filename, 'w', encoding='utf8') as outfile:
+                individual = dump_to_dict(ind)
+                from sys import version_info
+                if version_info < (3, 0):
+                    outfile.write(unicode(individual))
+                else:
+                    outfile.write(str(individual))
+        else:
+            raise ValueError('Filename must be a string.')
 
     def load(self, filename):
         """Load a set of features from a file.
@@ -499,8 +633,11 @@ class GeneticAlgorithm:
             Tuple with a set of features.
 
         """
-        with open(filename) as in_file:
-            return self._Individual(**json.load(in_file))
+        if isinstance(filename, (string_types, text_type)):
+            with open(filename) as in_file:
+                return self._Individual(**json.load(in_file))
+        else:
+            raise ValueError('Filename must be a string.')
 
     def plot(self):
         """Plot data from the genetic algorithm."""
